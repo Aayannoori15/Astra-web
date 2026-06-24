@@ -21,48 +21,44 @@ export default function AIChatPanel() {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-    
+
     const userMsg = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+
+    const updatedMessages: Message[] = [
+      ...messages,
+      { role: 'user', content: userMsg },
+    ];
+    setMessages(updatedMessages);
     setIsLoading(true);
 
     try {
-      // Format history for Gemini API
-      const history = messages.slice(1).map(m => ({
-        role: m.role === 'model' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      }));
+      // Send conversation history to secure server-side Groq route
+      const historyForAPI = updatedMessages
+        .slice(1) // skip the greeting
+        .map((m) => ({ role: m.role, content: m.content }));
 
-      history.push({ role: 'user', parts: [{ text: userMsg }] });
-
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('API Key missing. Add NEXT_PUBLIC_GEMINI_API_KEY to .env.local');
-      }
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: "You are the Celestial Oracle for Project Zenith. You are an expert in astronomy. Answer questions about planets, constellations, satellites, and the ISS concisely. Match the serious, sleek, scientific tone of the dashboard." }]
-          },
-          contents: history
-        })
+        body: JSON.stringify({ messages: historyForAPI }),
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `API Request Failed: ${response.status}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? `Request failed (${res.status})`);
       }
-      
-      const data = await response.json();
-      const modelReply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not process that request.';
-      
-      setMessages(prev => [...prev, { role: 'model', content: modelReply }]);
+
+      setMessages((prev) => [
+        ...prev,
+        { role: 'model', content: data.reply },
+      ]);
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'model', content: `[ERROR] ${err.message}` }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'model', content: `[ERROR] ${err.message}` },
+      ]);
     } finally {
       setIsLoading(false);
     }
