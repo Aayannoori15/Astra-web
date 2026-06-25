@@ -46,6 +46,11 @@ export function useISSTracking() {
           velocity: data.velocity ?? 7.66,
           timestamp: data.timestamp,
         });
+
+        // If backend returned a TLE, save it immediately
+        if (data.tle && !useZenithStore.getState().issTLE) {
+          useZenithStore.getState().setISSTLE(data.tle);
+        }
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -56,12 +61,56 @@ export function useISSTracking() {
     }
   }, [setISSPosition, setLoading]);
 
+  const fetchTLE = useCallback(async () => {
+    try {
+      const { issTLE } = useZenithStore.getState();
+      if (issTLE) return; // Only fetch once
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch('https://api.wheretheiss.at/v1/satellites/25544/tles?format=text', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        // Fallback to our own backend route which guarantees a TLE return
+        const backendRes = await fetch('/api/iss');
+        if (backendRes.ok) {
+          const backendData = await backendRes.json();
+          if (backendData.tle) {
+            useZenithStore.getState().setISSTLE(backendData.tle);
+          }
+        }
+        return;
+      }
+
+      const text = await res.text();
+      const lines = text.trim().split('\n');
+      if (lines.length >= 2) {
+        useZenithStore.getState().setISSTLE({ line1: lines[0].trim(), line2: lines[1].trim() });
+      }
+    } catch (e) {
+      console.warn('[ISS Tracker] TLE fetch failed, trying backend fallback', e);
+      try {
+        const backendRes = await fetch('/api/iss');
+        if (backendRes.ok) {
+          const backendData = await backendRes.json();
+          if (backendData.tle) {
+            useZenithStore.getState().setISSTLE(backendData.tle);
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('[ISS Tracker] All TLE fetch strategies failed');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     fetchISS();
+    fetchTLE();
     intervalRef.current = setInterval(fetchISS, REFRESH_INTERVAL);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchISS, setLoading]);
+  }, [fetchISS, fetchTLE, setLoading]);
 }

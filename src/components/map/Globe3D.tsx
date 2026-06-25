@@ -4,6 +4,7 @@ import { useRef, useMemo, Suspense } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, Stars, Line } from '@react-three/drei';
 import * as THREE from 'three';
+import * as satellite from 'satellite.js';
 import { useZenithStore } from '@/hooks/useZenithStore';
 
 const EARTH_RADIUS = 2;
@@ -177,6 +178,58 @@ function ConnectionArc({ lat, lng }: { lat: number; lng: number }) {
   return <Line points={points} color="#A78BFA" transparent opacity={0.3} lineWidth={1} dashed dashSize={0.05} gapSize={0.03} />;
 }
 
+function ISSOrbitPath() {
+  const { issTLE } = useZenithStore();
+  
+  const orbitPoints = useMemo(() => {
+    if (!issTLE) return [];
+    try {
+      const satrec = satellite.twoline2satrec(issTLE.line1, issTLE.line2);
+      const points: [number, number, number][] = [];
+      const now = new Date();
+      
+      // Calculate one full orbit (roughly 90-95 minutes) at 1-minute intervals
+      for (let i = 0; i <= 95; i++) {
+        const time = new Date(now.getTime() + i * 60000);
+        const positionAndVelocity = satellite.propagate(satrec, time);
+        
+        if (positionAndVelocity.position && typeof positionAndVelocity.position !== 'boolean') {
+          const gmst = satellite.gstime(time);
+          const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+          
+          const lat = satellite.degreesLat(positionGd.latitude);
+          const lng = satellite.degreesLong(positionGd.longitude);
+          const alt = positionGd.height;
+          
+          // Use the exact same coordinate mapping function for accurate 3D placement
+          // Convert altitude to our scaled earth radius model roughly
+          const radiusScale = EARTH_RADIUS * (1 + (alt / 6371));
+          const p = latLngToVec3(lat, lng, radiusScale);
+          points.push([p.x, p.y, p.z]);
+        }
+      }
+      return points;
+    } catch (e) {
+      console.warn('[ISS Orbit]', e);
+      return [];
+    }
+  }, [issTLE]);
+
+  console.log('[ISSOrbitPath] issTLE:', issTLE ? 'present' : 'null', 'orbitPoints:', orbitPoints.length);
+
+  if (orbitPoints.length < 2) return null;
+
+  return (
+    <Line 
+      points={orbitPoints} 
+      color="#F59E0B" 
+      transparent 
+      opacity={0.8} 
+      lineWidth={2} 
+    />
+  );
+}
+
 function Scene() {
   const { coordinates, issPosition } = useZenithStore();
 
@@ -193,6 +246,7 @@ function Scene() {
         <AtmosphereGlow />
       </group>
 
+      <ISSOrbitPath />
       {coordinates && <ZenithMarker lat={coordinates.lat} lng={coordinates.lng} />}
       {issPosition && <ISSMarker lat={issPosition.latitude} lng={issPosition.longitude} />}
       {coordinates && issPosition && <ConnectionArc lat={coordinates.lat} lng={coordinates.lng} />}

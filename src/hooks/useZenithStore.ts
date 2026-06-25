@@ -40,6 +40,7 @@ export interface SatelliteData {
 interface ZenithStore {
   coordinates: Coordinates | null;
   issPosition: ISSPosition | null;
+  issTLE: { line1: string, line2: string } | null;
   celestialBodies: CelestialBody[];
   satellites: SatelliteData[];
   loading: boolean;
@@ -49,6 +50,7 @@ interface ZenithStore {
 
   setCoordinates: (coords: Coordinates) => void;
   setISSPosition: (pos: ISSPosition) => void;
+  setISSTLE: (tle: { line1: string, line2: string }) => void;
   setCelestialBodies: (bodies: CelestialBody[]) => void;
   setSatellites: (sats: SatelliteData[]) => void;
   setLoading: (loading: boolean) => void;
@@ -60,6 +62,7 @@ interface ZenithStore {
 export const useZenithStore = create<ZenithStore>((set) => ({
   coordinates: null,
   issPosition: null,
+  issTLE: null,
   celestialBodies: [],
   satellites: [],
   loading: false,
@@ -69,6 +72,7 @@ export const useZenithStore = create<ZenithStore>((set) => ({
 
   setCoordinates: (coords) => set({ coordinates: coords }),
   setISSPosition: (pos) => set({ issPosition: pos }),
+  setISSTLE: (tle) => set({ issTLE: tle }),
   setCelestialBodies: (bodies) => set({ celestialBodies: bodies }),
   setSatellites: (sats) => set({ satellites: sats }),
   setLoading: (loading) => set({ loading }),

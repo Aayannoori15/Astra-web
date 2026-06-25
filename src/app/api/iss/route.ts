@@ -21,16 +21,23 @@ function computeFromTLE(line1: string, line2: string) {
   }
 
   const gmst = satellite.gstime(now);
-  const geo = satellite.eciToGeodetic(posVel.position, gmst);
+  const positionGd = satellite.eciToGeodetic(posVel.position, gmst);
+  
+  const velocityKmS = Math.sqrt(
+    Math.pow(posVel.velocity ? (posVel.velocity as satellite.EciVec3<number>).x : 0, 2) +
+    Math.pow(posVel.velocity ? (posVel.velocity as satellite.EciVec3<number>).y : 0, 2) +
+    Math.pow(posVel.velocity ? (posVel.velocity as satellite.EciVec3<number>).z : 0, 2)
+  );
 
   return {
     iss_position: {
-      latitude: String(satellite.degreesLat(geo.latitude)),
-      longitude: String(satellite.degreesLong(geo.longitude)),
+      latitude: satellite.degreesLat(positionGd.latitude).toFixed(4),
+      longitude: satellite.degreesLong(positionGd.longitude).toFixed(4),
     },
+    altitude: Math.round(positionGd.height),
+    velocity: Math.round(velocityKmS * 3600), // km/h
     timestamp: Math.floor(now.getTime() / 1000),
-    altitude: Math.round(geo.height),
-    velocity: 7.66,
+    tle: { line1, line2 } // Return TLE for frontend orbit drawing
   };
 }
 
