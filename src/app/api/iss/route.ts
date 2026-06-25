@@ -31,6 +31,7 @@ function computeFromTLE(line1: string, line2: string) {
     timestamp: Math.floor(now.getTime() / 1000),
     altitude: Math.round(geo.height),
     velocity: 7.66,
+    tle: { line1, line2 }
   };
 }
 

@@ -57,11 +57,11 @@ export default function BootSequence() {
             <div className="w-2 h-2 rounded-full bg-aurora animate-pulse shadow-[0_0_12px_#FFFFFF]" />
           </div>
           <div
-            className="absolute inset-0 origin-center"
+            className="absolute inset-0 origin-center rounded-full animate-spin"
             style={{
               background: 'conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,0.3) 40deg, transparent 80deg)',
-              borderRadius: '50%',
-              animation: 'radar-spin 1.5s linear infinite',
+              animationDuration: '1.5s',
+              animationTimingFunction: 'linear',
             }}
           />
         </div>
