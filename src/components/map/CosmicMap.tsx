@@ -71,7 +71,8 @@ function projectFutureOrbit(
     const angle = phase + (2 * Math.PI * t) / ORBIT_PERIOD;
     const lat = (Math.asin(Math.sin(angle) * Math.sin(inclination)) * 180) / Math.PI;
     const lngDrift = (360 * t) / 1436.1;
-    const lng = ((curLng + (angle - phase) * (180 / Math.PI) * 0.85 - lngDrift + 540) % 360) - 180;
+    // Keep longitude continuous to prevent the line from snapping across the screen
+    const lng = curLng + (angle - phase) * (180 / Math.PI) * 0.85 - lngDrift;
     points.push([lat, lng]);
   }
   return points;
@@ -81,11 +82,17 @@ export default function CosmicMap() {
   useISSTracking();
   const { coordinates, issPosition } = useZenithStore();
 
-  // Build ISS trail
   useEffect(() => {
     if (issPosition) {
-      issPathHistory.push([issPosition.latitude, issPosition.longitude]);
-      if (issPathHistory.length > 40) issPathHistory = issPathHistory.slice(-40);
+      let newLng = issPosition.longitude;
+      if (issPathHistory.length > 0) {
+        const lastLng = issPathHistory[issPathHistory.length - 1][1];
+        // Ensure continuous longitude to prevent horizontal lines wrapping across the map
+        while (newLng - lastLng > 180) newLng -= 360;
+        while (lastLng - newLng > 180) newLng += 360;
+      }
+      issPathHistory.push([issPosition.latitude, newLng]);
+      if (issPathHistory.length > 40) issPathHistory.shift();
     }
   }, [issPosition]);
 
@@ -137,25 +144,27 @@ export default function CosmicMap() {
               </div>
             </Popup>
           </Marker>
-          {issPathHistory.length > 1 && (
+          {issPathHistory.length > 1 && [-360, 0, 360].map((offset) => (
             <Polyline
-              positions={issPathHistory}
+              key={`history-${offset}`}
+              positions={issPathHistory.map(([lat, lng]) => [lat, lng + offset])}
               color="#F59E0B"
               weight={1.5}
               opacity={0.5}
               dashArray="4 8"
             />
-          )}
+          ))}
           {/* Projected future ground track — next 90 minutes */}
-          {futureOrbit.length > 1 && (
+          {futureOrbit.length > 1 && [-360, 0, 360].map((offset) => (
             <Polyline
-              positions={futureOrbit}
+              key={`future-${offset}`}
+              positions={futureOrbit.map(([lat, lng]) => [lat, lng + offset])}
               color="#A78BFA"
               weight={1}
               opacity={0.35}
               dashArray="2 6"
             />
-          )}
+          ))}
         </>
       )}
     </MapContainer>
