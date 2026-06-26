@@ -18,6 +18,7 @@ export interface SatelliteData {
 interface ZenithStore {
   coordinates: Coordinates | null;
   issPosition: ISSPosition | null;
+  issTLE: { line1: string, line2: string } | null;
   celestialBodies: CelestialBody[];
   satellites: SatelliteData[];
   loading: boolean;
@@ -27,12 +28,13 @@ interface ZenithStore {
   audioEnabled: boolean;
   tourActive: boolean;
   tourIndex: number;
-  alerts: string[];
   websiteTourActive: boolean;
   websiteTourStep: number;
+  alerts: string[]; // List of rise times or IDs for scheduled push alerts
 
   setCoordinates: (coords: Coordinates) => void;
   setISSPosition: (pos: ISSPosition) => void;
+  setISSTLE: (tle: { line1: string, line2: string }) => void;
   setCelestialBodies: (bodies: CelestialBody[]) => void;
   setSatellites: (sats: SatelliteData[]) => void;
   setLoading: (loading: boolean) => void;
@@ -48,13 +50,25 @@ interface ZenithStore {
 }
 
 export const useZenithStore = create<ZenithStore>((set) => ({
-  coordinates: null, issPosition: null, celestialBodies: [], satellites: [],
-  loading: false, lastUpdated: null, bootComplete: false, viewMode: '3d',
-  audioEnabled: false, tourActive: false, tourIndex: 0, alerts: [],
-  websiteTourActive: false, websiteTourStep: 0,
+  coordinates: null,
+  issPosition: null,
+  issTLE: null,
+  celestialBodies: [],
+  satellites: [],
+  loading: false,
+  lastUpdated: null,
+  bootComplete: false,
+  viewMode: '3d',
+  audioEnabled: false,
+  tourActive: false,
+  tourIndex: 0,
+  websiteTourActive: false,
+  websiteTourStep: 0,
+  alerts: [],
 
   setCoordinates: (coords) => set({ coordinates: coords }),
   setISSPosition: (pos) => set({ issPosition: pos }),
+  setISSTLE: (tle) => set({ issTLE: tle }),
   setCelestialBodies: (bodies) => set({ celestialBodies: bodies }),
   setSatellites: (sats) => set({ satellites: sats }),
   setLoading: (loading) => set({ loading }),

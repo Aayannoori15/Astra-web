@@ -4,6 +4,7 @@ import { useRef, useMemo, Suspense } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, Stars, Line } from '@react-three/drei';
 import * as THREE from 'three';
+import * as satellite from 'satellite.js';
 import { useZenithStore } from '@/hooks/useZenithStore';
 
 const EARTH_RADIUS = 2;
@@ -165,20 +166,51 @@ function ISSMarker({ lat, lng }: { lat: number; lng: number }) {
     </group>
   );
 }
-
-
-function OrbitRing() {
-  const points = useMemo(() => {
-    const pts: [number, number, number][] = [];
-    const r = EARTH_RADIUS * 1.18;
-    const inc = (51.6 * Math.PI) / 180;
-    for (let i = 0; i <= 128; i++) {
-      const t = (i / 128) * Math.PI * 2;
-      pts.push([r * Math.cos(t), r * Math.sin(t) * Math.sin(inc), r * Math.sin(t) * Math.cos(inc)]);
+function ISSOrbitPath() {
+  const { issTLE } = useZenithStore();
+  
+  const orbitPoints = useMemo(() => {
+    if (!issTLE) return [];
+    try {
+      const satrec = satellite.twoline2satrec(issTLE.line1, issTLE.line2);
+      const points: [number, number, number][] = [];
+      const now = new Date();
+      
+      for (let i = 0; i <= 95; i++) {
+        const time = new Date(now.getTime() + i * 60000);
+        const positionAndVelocity = satellite.propagate(satrec, time);
+        
+        if (positionAndVelocity.position && typeof positionAndVelocity.position !== 'boolean') {
+          const gmst = satellite.gstime(time);
+          const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+          
+          const lat = satellite.degreesLat(positionGd.latitude);
+          const lng = satellite.degreesLong(positionGd.longitude);
+          const alt = positionGd.height;
+          
+          const radiusScale = EARTH_RADIUS * (1 + (alt / 6371));
+          const p = latLngToVec3(lat, lng, radiusScale);
+          points.push([p.x, p.y, p.z]);
+        }
+      }
+      return points;
+    } catch (e) {
+      console.warn('[ISS Orbit]', e);
+      return [];
     }
-    return pts;
-  }, []);
-  return <Line points={points} color="#F59E0B" transparent opacity={0.22} lineWidth={1} />;
+  }, [issTLE]);
+
+  if (orbitPoints.length < 2) return null;
+
+  return (
+    <Line 
+      points={orbitPoints} 
+      color="#F59E0B" 
+      transparent 
+      opacity={0.4} 
+      lineWidth={1} 
+    />
+  );
 }
 
 function ConnectionArc({ lat, lng }: { lat: number; lng: number }) {
@@ -187,12 +219,47 @@ function ConnectionArc({ lat, lng }: { lat: number; lng: number }) {
 
   const start = latLngToVec3(lat, lng, EARTH_RADIUS * 1.02);
   const end = latLngToVec3(issPosition.latitude, issPosition.longitude, EARTH_RADIUS * 1.18);
-  const mid = start.clone().add(end).multiplyScalar(0.5).normalize().multiplyScalar(EARTH_RADIUS * 1.4);
+  
+  const points = useMemo(() => {
+    const pts: [number, number, number][] = [];
+    const segments = 128;
+    
+    const startNorm = start.clone().normalize();
+    let endNorm = end.clone().normalize();
+    
+    let angle = startNorm.angleTo(endNorm);
+    
+    // Prevent math errors if points are perfectly on opposite sides of the earth
+    if (angle > Math.PI - 0.001) {
+      endNorm.add(new THREE.Vector3(0.01, 0, 0.01)).normalize();
+      angle = startNorm.angleTo(endNorm);
+    }
+    
+    const sinAngle = Math.sin(angle);
+    const startRadius = EARTH_RADIUS * 1.02;
+    const endRadius = EARTH_RADIUS * 1.18;
 
-  const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-  const points = curve.getPoints(32).map((p): [number, number, number] => [p.x, p.y, p.z]);
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      let p: THREE.Vector3;
+      
+      // Use true mathematical SLERP (Spherical Linear Interpolation) formula
+      if (sinAngle < 0.001) {
+        p = startNorm.clone().lerp(endNorm, t).normalize();
+      } else {
+        const w1 = Math.sin((1 - t) * angle) / sinAngle;
+        const w2 = Math.sin(t * angle) / sinAngle;
+        p = startNorm.clone().multiplyScalar(w1).add(endNorm.clone().multiplyScalar(w2));
+      }
+      
+      const baseR = startRadius + (endRadius - startRadius) * t;
+      p.multiplyScalar(baseR);
+      pts.push([p.x, p.y, p.z]);
+    }
+    return pts;
+  }, [lat, lng, issPosition]);
 
-  return <Line points={points} color="#A78BFA" transparent opacity={0.3} lineWidth={1} dashed dashSize={0.05} gapSize={0.03} />;
+  return <Line points={points} color="#A78BFA" transparent opacity={0.4} lineWidth={1.5} dashed dashSize={0.08} gapSize={0.04} />;
 }
 
 // Constellations to visit in the Guided Tour
@@ -238,13 +305,13 @@ function Scene() {
         <Earth />
         <Clouds />
         <AtmosphereGlow />
+        
+        {/* Render paths inside the rotated Earth group to align visually with the map texture */}
+        <ISSOrbitPath />
+        {coordinates && <ZenithMarker lat={coordinates.lat} lng={coordinates.lng} />}
+        {issPosition && <ISSMarker lat={issPosition.latitude} lng={issPosition.longitude} />}
+        {coordinates && issPosition && <ConnectionArc lat={coordinates.lat} lng={coordinates.lng} />}
       </group>
-
-      <OrbitRing />
-
-      {coordinates && <ZenithMarker lat={coordinates.lat} lng={coordinates.lng} />}
-      {issPosition && <ISSMarker lat={issPosition.latitude} lng={issPosition.longitude} />}
-      {coordinates && issPosition && <ConnectionArc lat={coordinates.lat} lng={coordinates.lng} />}
 
       <Stars radius={50} depth={50} count={2000} factor={2} saturation={0} fade speed={0.5} />
 

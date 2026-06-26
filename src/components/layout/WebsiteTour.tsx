@@ -25,8 +25,8 @@ const STEPS: TourStep[] = [
   },
   {
     targetId: 'iss-tracker-panel',
-    title: '🛸 ISS Tracker',
-    description: 'Live International Space Station position updating every 5 seconds. Includes an animated speedometer showing its 27,600 km/h orbital velocity.',
+    title: '🚀 ISS Tracker',
+    description: 'Live International Space Station position updating every 5 seconds. The 3D globe plots its true, mathematically accurate 90-minute orbital trajectory using real-time TLE telemetry, and perfectly connects your Zenith to the ISS using Spherical Linear Interpolation.',
     position: 'left',
   },
   {
